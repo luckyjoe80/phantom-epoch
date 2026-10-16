@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phantom Epoch Helper</title>
+  <script>
+    // Always fetch the latest files, so a reload never runs a stale cached copy.
+    document.write(`<link rel="stylesheet" href="styles.css?v=${Date.now()}">`);
+  </script>
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+
+  <main id="view" class="view"></main>
+
+  <script>
+    for (const file of ['data.js', 'combat.js', 'app.js', 'campaign.js']) {
+      document.write(`<script src="${file}?v=${Date.now()}"><\/script>`);
+    }
+  </script>
+</body>
+</html>
