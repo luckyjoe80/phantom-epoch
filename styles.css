@@ -741,7 +741,6 @@ details > summary { list-style: none; }
 .draft-char { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
 .draft-char-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
 .draft-char-head .field { flex: 0 1 280px; }
-.draft-summary { display: inline-flex; gap: 6px; padding-bottom: 12px; }
 .pick-group { display: flex; flex-direction: column; gap: 8px; }
 .pick-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
 .pick-tile {

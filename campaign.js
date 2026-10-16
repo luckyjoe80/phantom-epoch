@@ -353,7 +353,6 @@ function renderNewCampaign() {
     return `<div class="draft-char">
       <div class="draft-char-head">
         <label class="field">Character ${i + 1} name <input type="text" data-draft="name" data-index="${i}" value="${esc(c.name)}"></label>
-        <span class="draft-summary">${charTags(c)}</span>
         <span class="spacer"></span>
         <button class="ghost danger" data-action="draft-remove" data-index="${i}" ${d.characters.length <= 1 ? 'disabled' : ''}>Remove</button>
       </div>
