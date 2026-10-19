@@ -761,6 +761,7 @@ details > summary { list-style: none; }
 .campaign-body > * { min-width: 0; }
 .inline-pick { display: inline-flex; align-items: center; gap: 6px; }
 .inline-pick select { min-width: 130px; }
+.pick-label { color: var(--muted); font-size: 0.85rem; }
 .ability.round span { background: var(--accent); color: #fff; }
 
 /* Full card wording in the action panel and the in-play strip. */

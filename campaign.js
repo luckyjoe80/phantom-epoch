@@ -365,11 +365,11 @@ function renderNewCampaign() {
 // Species and class dropdowns for a character between missions.
 function identityPickers(c, ch) {
   const taken = new Set(c.characters.filter((o) => o !== ch).map((o) => o.classId));
-  return `<label class="inline-pick"><span class="pill species">Species</span>
+  return `<label class="inline-pick"><span class="pick-label">Species</span>
       <select data-action="char-species" data-id="${ch.id}" aria-label="Species">
         ${PLAYER_SPECIES.map((sp) => `<option value="${sp.id}" ${sp.id === ch.speciesId ? 'selected' : ''}>${esc(sp.name)}</option>`).join('')}
       </select></label>
-    <label class="inline-pick"><span class="pill class">Class</span>
+    <label class="inline-pick"><span class="pick-label">Class</span>
       <select data-action="char-class" data-id="${ch.id}" aria-label="Class">
         ${PLAYER_CLASSES.map((cl) => `<option value="${cl.id}" ${cl.id === ch.classId ? 'selected' : ''} ${taken.has(cl.id) ? 'disabled' : ''}>${esc(cl.name)}${taken.has(cl.id) ? ' (taken)' : ''}</option>`).join('')}
       </select></label>`;
