@@ -676,10 +676,14 @@ const GEAR = {
 
 // Bandage tokens: a character gains one each time a Heal action restores HP,
 // and can't be Healed once every slot is full.
-// The standard Attack die's eight faces. A Critical Strike counts as 3 and a
+// The two 8-sided Attack dice (rulebook p.36). Players choose which to roll;
+// adversaries always roll the Basic die. A Critical Strike counts as 3 and a
 // Fumble as 0 (see combat.js).
-const ATTACK_DIE_FACES = ['2', '4', '3', '3', '2', 'crit', 'fumble', '4'];
-const DIE_RESULT_LABELS = { 2: '2', 3: '3', 4: '4', crit: 'Critical Strike', fumble: 'Fumble' };
+const ATTACK_DICE = [
+  { id: 'basic', name: 'Basic die', faces: ['2', '4', '3', '3', '2', 'crit', 'fumble', '4'] },
+  { id: 'blitz', name: 'Blitz die', faces: ['fumble', 'crit', '3', 'crit', 'fumble', '4', 'fumble', '5'] },
+];
+const DIE_RESULT_LABELS = { 2: '2', 3: '3', 4: '4', 5: '5', crit: 'Critical Strike', fumble: 'Fumble' };
 
 const BANDAGE_SLOTS = 2;
 

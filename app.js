@@ -452,10 +452,10 @@ function colorDot(m) {
 
 // A figure's number and colour: players are orange 1–4, adversaries are
 // numbered within their group in the group's colour.
-// The distinct Attack die results: numbers low to high, then Critical Strike and Fumble.
-function dieResults() {
-  const unique = [...new Set(ATTACK_DIE_FACES)];
-  return [...unique.filter((r) => !isNaN(r)).sort((a, b) => a - b), ...unique.filter((r) => isNaN(r))];
+// A die's distinct results: numbers low to high, then Critical Strike and Fumble.
+function dieResults(die) {
+  const unique = [...new Set(die.faces)];
+  return [...unique.filter((r) => !isNaN(r)).sort((a, b) => a - b), ...['crit', 'fumble'].filter((r) => unique.includes(r))];
 }
 
 function figureNumber(kind, c) {
@@ -892,9 +892,11 @@ function partSectionHtml(att, A, index, number, total) {
       </div>`;
     } else if (selected && !missed) {
       inputs = `<div class="atk-inputs">
+        ${ATTACK_DICE.filter((die) => A.kind === 'player' || die.id === 'basic').map((die) => `<div class="atk-line">
+          <span class="atk-label">${A.kind === 'player' ? die.name : 'Attack die'}</span>
+          ${dieResults(die).map((r) => seg('atk-die', c.id, `${die.id}:${r}`, DIE_RESULT_LABELS[r], (t.die || 'basic') === die.id && String(t.roll) === r)).join('')}
+        </div>`).join('')}
         <div class="atk-line">
-          <span class="atk-label">Attack die</span>
-          ${dieResults().map((r) => seg('atk-die', c.id, r, DIE_RESULT_LABELS[r], String(t.roll) === r)).join('')}
           ${t.roll === 'fumble' && A.kind === 'player' ? `<label class="atk-bonus"><input type="checkbox" ${data} data-action="atk-convert" data-char="${c.id}" ${t.convert ? 'checked' : ''}> Convert to 0 by becoming Knocked Down</label>` : ''}
           ${(t.roll === 'crit' || action.critOnSuccess) && A.kind === 'player' && critOptions(A).length > 1 ? `<div class="atk-line">
             <span class="atk-label">Critical ability</span>
@@ -1230,10 +1232,15 @@ document.addEventListener('click', (ev) => {
       if (!d.accuracy) d.targets = {};
       break;
     }
-    case 'atk-die':
-      target().roll = target().roll === btn.dataset.value ? '' : btn.dataset.value;
-      target().convert = false;
+    case 'atk-die': {
+      const t = target();
+      const [die, roll] = btn.dataset.value.split(':');
+      const same = (t.die || 'basic') === die && t.roll === roll;
+      t.die = die;
+      t.roll = same ? '' : roll;
+      t.convert = false;
       break;
+    }
     case 'atk-crit':
       target().critChoice = Number(btn.dataset.value);
       break;
