@@ -612,7 +612,7 @@ document.addEventListener('click', (ev) => {
       ui.ending = false;
       if (state.phase === 'players') goToMonsters();
       else if (state.phase === 'monsters') goToInitiative();
-      else endRound();
+      else requestEndRound();
       return;
     case 'phase-back':
       if (state.phase === 'monsters') backToPlayers();

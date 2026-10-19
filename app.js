@@ -104,11 +104,12 @@ function endRoundEvent() {
   }
   if (fx.reshuffle && state.players.some((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS)) {
     // This and every other drawn Round 6+ event go back on top, shuffled.
+    const name = EVENTS[state.event].name;
     const back = [state.event, ...state.eventDiscard.filter(isLateEvent)];
     state.eventDiscard = state.eventDiscard.filter((id) => !isLateEvent(id));
     state.eventDeck.push(...shuffle(back));
     state.event = null;
-    log(`${EVENTS[back[0]].name}: a surviving character has an empty bandage slot — ${back.length} Round 6+ event${back.length === 1 ? '' : 's'} shuffled back onto the Event deck`);
+    log(`${name}: a surviving character has an empty bandage slot — ${back.length} Round 6+ event${back.length === 1 ? '' : 's'} shuffled back onto the Event deck`);
   }
 }
 
@@ -146,6 +147,55 @@ function eventHelpHtml(fx) {
       ${fx.reshuffle ? '<p class="tag">If a surviving character still has an empty bandage slot when the round ends, this and every drawn Round 6+ event are shuffled back onto the Event deck.</p>' : ''}</div>`;
   }
   return '';
+}
+
+// What the event does when the round ends, as notes for the End Round dialog
+// ([] if it does nothing then).
+function roundEndNotes() {
+  const fx = eventEffect();
+  const names = (list) => list.map((p) => esc(p.name)).join(', ');
+  if (fx.type === 'evac') {
+    const down = state.players.filter((p) => p.hp <= 0);
+    return [down.length
+      ? `<b>${names(down)} ${down.length === 1 ? 'is' : 'are'} defeated.</b> Unless all mission objectives are complete, the mission is lost.`
+      : 'No character is defeated, so the mission goes on.'];
+  }
+  if (fx.type === 'restDiscard') {
+    const resting = state.players.filter((p) => p.resting);
+    return [resting.length
+      ? `${names(resting)} recover${resting.length === 1 ? 's' : ''} their discarded cards, then the app randomly discards one card${resting.length === 1 ? '' : ' each'}. Check the log and discard those cards at the table.`
+      : 'No character rested this round, so nothing happens.'];
+  }
+  if (fx.reshuffle) {
+    const open = state.players.filter((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS);
+    const unrolled = open.filter((p) => !state.eventRolls[p.id]);
+    const back = 1 + state.eventDiscard.filter(isLateEvent).length;
+    return [
+      ...(unrolled.length ? [`<b>Not rolled yet:</b> ${names(unrolled)}. Record their rolls on the event first.`] : []),
+      open.length
+        ? `${names(open)} still ${open.length === 1 ? 'has' : 'have'} an empty bandage slot, so this and the other drawn Round 6+ events (${back} in all) are shuffled back onto the Event deck. Do the same with the cards at the table.`
+        : 'No surviving character has an empty bandage slot, so nothing is reshuffled.',
+    ];
+  }
+  return [];
+}
+
+// End the round, first showing the event's round-end effects if it has any.
+function requestEndRound() {
+  const notes = roundEndNotes();
+  if (!notes.length) {
+    endRound();
+    return;
+  }
+  const dialog = document.getElementById('round-end-dialog');
+  dialog.innerHTML = `<h2 id="round-end-title">End of round ${state.round}: ${esc(EVENTS[state.event].name)}</h2>
+    <p class="event-text">${esc(EVENTS[state.event].text)}</p>
+    <ul class="round-end-notes">${notes.map((n) => `<li>${n}</li>`).join('')}</ul>
+    <div class="dialog-actions">
+      <button class="ghost" data-action="round-end-cancel">Back to the round</button>
+      <button class="primary" data-action="round-end-confirm">Apply and start round ${state.round + 1} →</button>
+    </div>`;
+  dialog.showModal();
 }
 
 function eventBannerHtml() {
@@ -1287,7 +1337,14 @@ document.addEventListener('click', (ev) => {
       mainTab = btn.dataset.tab;
       break;
     case 'end-round':
+      requestEndRound();
+      return;
+    case 'round-end-confirm':
+      document.getElementById('round-end-dialog').close();
       endRound();
+      return;
+    case 'round-end-cancel':
+      document.getElementById('round-end-dialog').close();
       return;
     case 'toggle-card': {
       const p = findChar('player', id);
