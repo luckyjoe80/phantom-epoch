@@ -1176,8 +1176,19 @@ function partSectionHtml(att, A, index, number, total) {
       ${list(`${sideName(A.kind)} (allies)`, allies)}
     </details>` : '';
 
+  // "If able, Attack … If not, <alternative>": pick which happened.
+  const alt = action.type === 'attack' && action.otherwise;
+  const altChosen = alt && partData(att, step).otherwise;
+  const altChoice = alt ? `<div class="atk-line alt-choice">
+      <span class="atk-label">Able to Attack?</span>
+      <button class="small seg ${altChosen ? '' : 'active'}" ${data} data-action="atk-otherwise" data-value="attack">Yes: ${esc(describeAction(action, A).split(' · ')[0])}</button>
+      <button class="small seg ${altChosen ? 'active' : ''}" ${data} data-action="atk-otherwise" data-value="alt">No: ${esc(alt.label)}</button>
+    </div>` : '';
+
   let body;
-  if (support) {
+  if (altChosen) {
+    body = `<p class="tag">${esc(A.c.name)} can't Attack, so instead: ${esc(alt.text)}</p>`;
+  } else if (support) {
     body = `<p class="tag">${action.who === 'all' ? 'Tick yourself and every adjacent ally.' : `Pick ${SUPPORT_WHO[action.who]}.`}</p>
       <div class="atk-sides">${list(`${sideName(A.kind)} (own side)`, living(A.kind))}</div>`;
   } else if (auraStep) {
@@ -1201,7 +1212,8 @@ function partSectionHtml(att, A, index, number, total) {
     ${auraStep ? '' : `<span class="tag">${esc(describeAction(action, A))}`}${auraStep ? '' : ''}${action.type === 'attack' && A.c.pierce ? ` · +Pierce ${A.c.pierce} from a card` : ''}${action.type === 'attack' && attackBonus(A.kind, A.c) ? ` · ${signed(attackBonus(A.kind, A.c))} Attack attribute` : ''}${auraStep ? '' : '</span>'}
     ${blocker ? `<p class="warn">${esc(A.c.name)} ${esc(blocker)}.</p>` : ''}
     ${custom}
-    ${accuracy}
+    ${altChoice}
+    ${altChosen ? '' : accuracy}
     ${body}
   </section>`;
 }
@@ -1508,6 +1520,15 @@ document.addEventListener('click', (ev) => {
     case 'atk-skip':
       skipAttack();
       break;
+    case 'atk-otherwise': {
+      const d = part();
+      d.otherwise = btn.dataset.value === 'alt';
+      if (d.otherwise) {
+        Object.keys(d.targets).forEach((k) => delete d.targets[k]);
+        d.accuracy = null;
+      }
+      break;
+    }
     case 'atk-cancel':
       cancelAttack();
       break;

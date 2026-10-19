@@ -387,17 +387,19 @@ const line = (color, action) => ({ color, ...action });
 
 // Sentry class lines.
 const SENTRY_FALLBACK = 'If able, Attack -2 on primary target. If not, Move 3 toward closest ally. If no path to an ally exists, Move normally.';
+// What the Sentry does when it can't make that Attack (an action's `otherwise`).
+const SENTRY_OTHERWISE = { move: 3, label: 'Move 3 toward closest ally', text: 'Move 3 toward the closest ally. If no path to an ally exists, Move normally.' };
 const SENTRY = {
   shieldWall: { name: 'Shield Wall', ap: 2,
     text: `(R) Adjacent allies and objects use the higher of this adversary's Guard value or their own.\n${SENTRY_FALLBACK}`,
     round: { aura: { kind: 'share' } },
-    actions: [{ type: 'attack', mod: -2 }] },
+    actions: [{ type: 'attack', mod: -2, otherwise: SENTRY_OTHERWISE }] },
   strike: { name: 'Strike', ap: 3, text: 'Attack',
     actions: [{ type: 'attack', mod: 0 }] },
   stoic: { name: 'Stoic Defender', ap: 3,
     text: `(R) Guard +1 to self, adjacent non-Sentry allies, and adjacent objects.\n${SENTRY_FALLBACK}`,
     round: { guard: 1, aura: { kind: 'bonus', value: 1, notClass: 'sentry' } },
-    actions: [{ type: 'attack', mod: -2 }] },
+    actions: [{ type: 'attack', mod: -2, otherwise: SENTRY_OTHERWISE }] },
   subdue: { name: 'Subdue', ap: 4, text: 'Attack (Inflict Knocked Down)',
     actions: [{ type: 'attack', mod: 0, inflict: ['knocked'] }] },
   impenetrable: { name: 'Impenetrable Defense', ap: 5, text: 'Gain Resilient and Barrier',

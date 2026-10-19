@@ -505,13 +505,14 @@ function shownParts(att) {
 
 const partIsEmpty = (att, i) => {
   const d = partData(att, i);
+  if (d.otherwise) return false; // "If not able to Attack" was chosen
   const blindMiss = att.actions[i].type === 'attack' && d.accuracy === false;
   return !Object.keys(d.targets).length && !blindMiss;
 };
 
 // Ready when every part is either left empty (skipped) or fully filled in.
 function allPartsReady(att) {
-  return shownParts(att).every((i) => partIsEmpty(att, i) || withPart(att, i, () => attackReady(att)));
+  return shownParts(att).every((i) => partData(att, i).otherwise || partIsEmpty(att, i) || withPart(att, i, () => attackReady(att)));
 }
 
 // Apply every part on screen in order; empty parts are skipped. Stops early
@@ -524,7 +525,8 @@ function applyAll() {
     const d = att.parts[att.step];
     att.targets = d.targets;
     att.accuracy = d.accuracy;
-    if (partIsEmpty(att, att.step)) skipAttack();
+    if (d.otherwise) applyOtherwise();
+    else if (partIsEmpty(att, att.step)) skipAttack();
     else applyAttack();
   }
 }
@@ -858,9 +860,23 @@ function applyCritical(A, T, lost, choice = 0) {
   return queued;
 }
 
+// The figure couldn't make the Attack, so it does the card's alternative
+// instead (e.g. Sentry: "If not, Move 3 toward closest ally").
+function applyOtherwise() {
+  const att = state.attack;
+  const A = charById(att.attackerId);
+  const alt = currentAction(att).otherwise;
+  log(`${A.c.name} can't Attack with ${att.source}, so instead: ${alt.text}`);
+  if (alt.move) A.c.mp = true;
+  advanceAttack();
+}
+
 function skipAttack() {
   const att = state.attack;
-  log(`${charById(att.attackerId).c.name} skips ${att.source}${att.actions.length > 1 ? ` (Attack ${att.step + 1})` : ''}`);
+  const name = charById(att.attackerId).c.name;
+  log(currentAction(att).type === 'auraAllies'
+    ? `${name}'s ${att.source}: no adjacent allies to protect`
+    : `${name} skips ${att.source}${att.actions.length > 1 ? ` (part ${att.step + 1})` : ''}`);
   advanceAttack();
 }
 
