@@ -1130,7 +1130,7 @@ function partSectionHtml(att, A, index, number, total) {
           ${dieResults(die).map((r) => seg('atk-die', c.id, `${die.id}:${r}`, DIE_RESULT_LABELS[r], (t.die || 'basic') === die.id && String(t.roll) === r)).join('')}
         </div>`).join('')}
         <div class="atk-line">
-          ${t.roll === 'fumble' && A.kind === 'player' ? `<label class="atk-bonus"><input type="checkbox" ${data} data-action="atk-convert" data-char="${c.id}" ${t.convert ? 'checked' : ''}> Convert to 0 by becoming Knocked Down</label>` : ''}
+          ${t.roll === 'fumble' && A.kind === 'player' && !HOUSE_RULES.fumbleIsZero ? `<label class="atk-bonus"><input type="checkbox" ${data} data-action="atk-convert" data-char="${c.id}" ${t.convert ? 'checked' : ''}> Convert to 0 by becoming Knocked Down</label>` : ''}
           ${(t.roll === 'crit' || action.critOnSuccess) && A.kind === 'player' && critOptions(A).length > 1 ? `<div class="atk-line">
             <span class="atk-label">Critical ability</span>
             ${critOptions(A).map((o, oi) => seg('atk-crit', c.id, oi, `${esc(o.label)} <small>(${esc(o.source)})</small>`, (t.critChoice || 0) === oi)).join('')}

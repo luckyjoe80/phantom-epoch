@@ -674,8 +674,13 @@ const GEAR = {
   ],
 };
 
-// Bandage tokens: a character gains one each time a Heal action restores HP,
-// and can't be Healed once every slot is full.
+// House rules: deliberate changes to the rulebook.
+//   fumbleIsZero — a Fumble on an Attack counts as a roll of 0 and the Attack
+//     resolves as normal. The attacker isn't stopped from making other Attacks,
+//     and there's no Knocked Down conversion. (Rulebook p.20: a Fumble misses
+//     and ends the attacker's Attacks for the turn.)
+const HOUSE_RULES = { fumbleIsZero: true };
+
 // The two 8-sided Attack dice (rulebook p.36). Players choose which to roll;
 // adversaries always roll the Basic die. A Critical Strike counts as 3 and a
 // Fumble as 0 (see combat.js).
@@ -749,6 +754,8 @@ const EVENTS_LATE = [
 ];
 const EARLY_EVENTS_IN_DECK = 5;
 
+// Bandage tokens: a character gains one each time a Heal action restores HP,
+// and can't be Healed once every slot is full.
 const BANDAGE_SLOTS = 2;
 
 // Up to 4 characters per mission, at most one per class (rulebook p.8).

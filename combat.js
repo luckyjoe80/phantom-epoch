@@ -5,7 +5,8 @@
 // Attack flow, per target (each target of a multi-target Attack is its own roll):
 //   1. Roll the Attack die on the table and enter the result. A Fumble misses
 //      and ends the attacker's Attacks for the turn (characters may convert it
-//      to 0 by becoming Knocked Down). A Critical Strike counts as 3, pierces
+//      to 0 by becoming Knocked Down) — unless the fumbleIsZero house rule is
+//      on, when it simply counts as 0. A Critical Strike counts as 3, pierces
 //      all positive Guard, skips the Accuracy die and triggers a critical ability.
 //   2. Attack value = roll + card modifier + adversary Attack attribute
 //      (−2 if Weakened).
@@ -653,7 +654,7 @@ function resolveTarget(att, targetId) {
   if (!crit && !fumble && (t.roll === '' || Number.isNaN(Number(t.roll)))) {
     return { ready: false, text: 'Enter the Attack die result' };
   }
-  if (fumble && !(A.kind === 'player' && t.convert)) {
+  if (fumble && !HOUSE_RULES.fumbleIsZero && !(A.kind === 'player' && t.convert)) {
     return { ready: true, miss: true, fumble: true, damage: 0, text: 'Fumble — the Attack misses, and no further Attacks this turn' };
   }
   if (t.ranged && !crit && !t.reached && !action.noAccuracy) {
@@ -687,7 +688,7 @@ function resolveTarget(att, targetId) {
     }
   }
 
-  const atk = [crit ? 'Critical Strike (3)' : fumble ? 'Fumble converted (0)' : `Roll ${roll}`];
+  const atk = [crit ? 'Critical Strike (3)' : fumble ? (HOUSE_RULES.fumbleIsZero ? 'Fumble (0)' : 'Fumble converted (0)') : `Roll ${roll}`];
   if (mod) atk.push(signed(mod));
   if (flat) atk.push(`${signed(flat)} Attack`);
   if (weak) atk.push('−2 Weakened');
@@ -769,7 +770,7 @@ function applyAttack() {
       log(`${label} → ${T.c.name}: ${r.text}`);
       if (r.fumble && r.miss) {
         A.c.fumbled = true;
-      } else if (r.fumble) {
+      } else if (r.fumble && !HOUSE_RULES.fumbleIsZero) {
         if (!has(A.c, 'knocked')) A.c.statuses.push('knocked');
         log(`${A.c.name} converts the Fumble by becoming Knocked Down`);
       }
