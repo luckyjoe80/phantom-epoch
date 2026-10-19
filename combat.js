@@ -360,6 +360,7 @@ function endTurn(idx) {
   c.hold = {};
   c.pierce = 0; // "Play before any one Attack action" — unused Pierce lapses
   c.fumbled = false;
+  c.mp = false;
   c.attackedThisTurn = false;
   c.convertedAttack = false;
 }
@@ -389,6 +390,7 @@ function useCard(kind, c, card) {
   const notes = actions.filter((a) => ['move', 'leap', 'retreat'].includes(a.type))
     .map((a) => `${{ move: 'Move', leap: 'Leap', retreat: 'Retreat' }[a.type]} ${a.value}`);
   log(`${c.name} plays ${card.name}${notes.length ? ` (${notes.join(', ')})` : ''}`);
+  if (notes.length) c.mp = true; // MP to spend, e.g. to stand up from Knocked Down
 
   if (card.effect) addEffect(c, card);
   for (const a of actions) {
@@ -431,6 +433,7 @@ function convertCard(kind, c, card, to) {
   c.used.push(card.id);
   if (to === 'move') {
     log(`${c.name} converts ${card.name} to Move ${convertMp(kind, c, card)}`);
+    c.mp = true;
     return;
   }
   c.convertedAttack = true;

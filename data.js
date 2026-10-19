@@ -329,6 +329,11 @@ const PLAYER_CLASSES = [
 // one Class Action card each round. Class cards list an AP cost for each of
 // the four HP-base colours (lowest first); each adversary acts on its colour's
 // line, so its initiative is species AP + its colour's class AP.
+// Characters are shown in this colour, numbered 1–4.
+const PLAYER_COLOR = '#ff9f43';
+
+// Each adversary group (same species and class) shares one HP-base colour
+// and plays that colour's line of its class card; members are numbered.
 const ADVERSARY_COLORS = [
   { id: 'darkblue',  name: 'Dark blue',  css: '#3b6fe0' },
   { id: 'lightblue', name: 'Light blue', css: '#5cc8ff' },

@@ -38,10 +38,7 @@ function loadRoot() {
         if (c.setup) {
           const rows = c.setup.adversaries.filter((a) => ADV[a.typeId] && ADV[a.typeId].levels[a.level]);
           c.setup.adversaries = [];
-          for (const a of rows) {
-            if (a.count) addPending(c.setup.adversaries, [], a.typeId, a.level, a.count);
-            else c.setup.adversaries.push(a);
-          }
+          for (const a of rows) addGroup(c.setup.adversaries, [], a.typeId, a.level, a.count || 1, a.color);
         }
         repairCharacters(c);
       }
@@ -189,70 +186,52 @@ function startSetup(campaign) {
   go('setup');
 }
 
-// ---- Adversaries and their HP-base colours ---------------------------------
-// Adversaries waiting to be placed are listed one by one: { typeId, level, color }.
-// Within a type, colours stay spread as evenly as possible (rulebook p.10),
-// and a newly placed adversary takes a colour its type has fewest of on the
-// map (p.26). `onMap` is the adversaries already placed.
+// ---- Adversary groups and their HP-base colours ----------------------------
+// Adversaries to place are listed by group: { typeId, level, count, color }.
+// A group (same species and class) shares one colour; joining a group that is
+// already on the map keeps its colour. `onMap` is the adversaries placed.
 
-function colorCounts(typeId, onMap, pending, skip = -1) {
-  const counts = ADVERSARY_COLORS.map(() => 0);
-  onMap.filter((m) => m.typeId === typeId && m.hp > 0).forEach((m) => { counts[m.color] += 1; });
-  pending.forEach((e, i) => { if (i !== skip && e.typeId === typeId) counts[e.color] += 1; });
-  return counts;
+// A colour that no other group uses (or the first, if all four are taken).
+function unusedColor(list, onMap, skip = -1) {
+  const taken = [...onMap.map((m) => m.color), ...list.filter((_, i) => i !== skip).map((g) => g.color)];
+  const i = ADVERSARY_COLORS.findIndex((_, ci) => !taken.includes(ci));
+  return i < 0 ? 0 : i;
 }
 
-// Colours pending entry i may take without unbalancing its type.
-function allowedColors(pending, i, onMap) {
-  const counts = colorCounts(pending[i].typeId, onMap, pending, i);
-  const min = Math.min(...counts);
-  return counts.map((n) => n === min);
-}
-
-function addPending(pending, onMap, typeId, level, count) {
-  for (let k = 0; k < count; k++) {
-    const counts = colorCounts(typeId, onMap, pending);
-    pending.push({ typeId, level, color: counts.indexOf(Math.min(...counts)) });
-  }
-}
-
-// Pick a colour for entry i. A colour another waiting adversary of the same
-// type holds is swapped with it, which keeps the spread even.
-function choosePendingColor(pending, i, color, onMap) {
-  if (allowedColors(pending, i, onMap)[color]) {
-    pending[i].color = color;
+function addGroup(list, onMap, typeId, level, count, color = null) {
+  const existing = list.find((g) => g.typeId === typeId);
+  if (existing) {
+    existing.count += count;
     return;
   }
-  const other = pending.findIndex((e, j) => j !== i && e.typeId === pending[i].typeId && e.color === color);
-  if (other >= 0) [pending[other].color, pending[i].color] = [pending[i].color, color];
+  const onMapColor = (onMap.find((m) => m.typeId === typeId) || {}).color;
+  list.push({ typeId, level, count, color: onMapColor ?? color ?? unusedColor(list, onMap) });
 }
 
-// After removing an entry, move waiting adversaries off over-used colours.
-function rebalance(pending, typeId, onMap) {
-  for (;;) {
-    const counts = colorCounts(typeId, onMap, pending);
-    const max = Math.max(...counts);
-    const min = Math.min(...counts);
-    if (max - min <= 1) return;
-    const i = pending.map((e, j) => j).reverse().find((j) => pending[j].typeId === typeId && counts[pending[j].color] === max);
-    if (i === undefined) return;
-    pending[i].color = counts.indexOf(min);
-  }
-}
-
-function pendingListHtml(pending, onMap, scope) {
-  if (!pending.length) return '<p class="empty">None yet.</p>';
-  return `<ul class="setup-list">${pending.map((e, i) => {
-    const allowed = allowedColors(pending, i, onMap);
-    const picks = ADVERSARY_COLORS.map((col, ci) => {
-      const swappable = pending.some((o, j) => j !== i && o.typeId === e.typeId && o.color === ci);
-      const ok = allowed[ci] || swappable;
-      return `<button class="color-pick ${e.color === ci ? 'active' : ''}" data-action="pick-color" data-scope="${scope}" data-index="${i}" data-color="${ci}"
-          ${ok ? '' : 'disabled'} aria-pressed="${e.color === ci}" title="${esc(col.name)}${ok ? '' : ' — would unbalance the colours'}">
-        <span class="color-dot" style="background:${col.css}"></span>${esc(col.name)}</button>`;
-    }).join('');
-    return `<li class="setup-row">
-      <b>${esc(ADV[e.typeId].name)}${Object.keys(ADV[e.typeId].levels).length > 1 ? ` <span class="tag">Level ${e.level}</span>` : ''}</b>
+function groupListHtml(list, onMap, scope) {
+  if (!list.length) return '<p class="empty">None yet.</p>';
+  return `<ul class="setup-list">${list.map((g, i) => {
+    const onMapGroup = onMap.filter((m) => m.typeId === g.typeId);
+    const firstNum = onMapGroup.length ? Math.max(...onMapGroup.map((m) => m.num || 0)) + 1 : 1;
+    const nums = Array.from({ length: g.count }, (_, k) => firstNum + k);
+    const others = [...onMap.filter((m) => m.typeId !== g.typeId).map((m) => ({ color: m.color, name: ADV[m.typeId].name })),
+      ...list.filter((_, k) => k !== i).map((o) => ({ color: o.color, name: ADV[o.typeId].name }))];
+    const picks = onMapGroup.length
+      ? `<span class="tag">${colorDot(g)} ${esc(ADVERSARY_COLORS[g.color].name)} — joins the group already on the map</span>`
+      : ADVERSARY_COLORS.map((col, ci) => {
+        const sharedWith = [...new Set(others.filter((o) => o.color === ci).map((o) => o.name))];
+        return `<button class="color-pick ${g.color === ci ? 'active' : ''}" data-action="pick-color" data-scope="${scope}" data-index="${i}" data-color="${ci}"
+            aria-pressed="${g.color === ci}" title="${esc(col.name)}${sharedWith.length ? ` — also used by ${esc(sharedWith.join(', '))}` : ''}">
+          <span class="color-dot" style="background:${col.css}"></span>${esc(col.name)}${sharedWith.length ? ' <small>(in use)</small>' : ''}</button>`;
+      }).join('');
+    return `<li class="setup-row group-row">
+      <b>${esc(ADV[g.typeId].name)}${Object.keys(ADV[g.typeId].levels).length > 1 ? ` <span class="tag">Level ${g.level}</span>` : ''}</b>
+      <span class="group-count">
+        <button class="small" data-action="group-count" data-scope="${scope}" data-index="${i}" data-delta="-1" aria-label="One fewer">−</button>
+        <b>${g.count}</b>
+        <button class="small" data-action="group-count" data-scope="${scope}" data-index="${i}" data-delta="1" aria-label="One more">+</button>
+      </span>
+      <span class="group-nums">${nums.map((n) => `<span class="fig-token" style="--tok:${ADVERSARY_COLORS[g.color].css}">${n}</span>`).join('')}</span>
       <span class="color-picks">${picks}</span>
       <button class="ghost danger small" data-action="remove-pending" data-scope="${scope}" data-index="${i}">Remove</button>
     </li>`;
@@ -263,7 +242,9 @@ function startMission(campaign) {
   const setup = campaign.setup;
   state = newMissionState(campaign.characters, setup.name.trim() || `Mission ${campaign.missions.length + 1}`);
   state.id = uid();
-  for (const e of setup.adversaries) state.monsters.push(makeMonster(e.typeId, e.level, 1, e.color));
+  for (const g of setup.adversaries) {
+    for (let k = 0; k < g.count; k++) state.monsters.push(makeMonster(g.typeId, g.level, 1, g.color));
+  }
   log(`— ${state.name} begins with ${state.monsters.length} adversar${state.monsters.length === 1 ? 'y' : 'ies'} —`);
   campaign.active = state;
   campaign.setup = null;
@@ -275,10 +256,12 @@ function startMission(campaign) {
 function placeAdversaries() {
   const joins = state.phase === 'players' ? state.round : state.round + 1;
   const placed = [];
-  for (const e of ui.pending) {
-    const m = makeMonster(e.typeId, e.level, joins, e.color);
-    state.monsters.push(m);
-    placed.push(`${m.name} (${ADVERSARY_COLORS[m.color].name})`);
+  for (const g of ui.pending) {
+    for (let k = 0; k < g.count; k++) {
+      const m = makeMonster(g.typeId, g.level, joins, g.color);
+      state.monsters.push(m);
+      placed.push(`${m.name} (${ADVERSARY_COLORS[m.color].name})`);
+    }
   }
   if (!placed.length) return;
   ui.pending = [];
@@ -456,8 +439,8 @@ function renderSetup() {
     <div class="add-row">${adversaryPickers('setup-add', ui.add)}
       <button data-action="setup-add">Add</button>
     </div>
-    <p class="tag">Pick each adversary's HP-base colour to match the table. Colours stay spread evenly within each type.</p>
-    ${pendingListHtml(s.adversaries, [], 'setup')}
+    <p class="tag">Each group shares one HP-base colour; its members are numbered 1, 2, 3…</p>
+    ${groupListHtml(s.adversaries, [], 'setup')}
     <div class="sheet-foot">
       <button class="ghost" data-action="go-campaign">Cancel</button>
       <button class="primary" data-action="start-mission">Start mission →</button>
@@ -476,14 +459,14 @@ function missionPanelsHtml() {
       <div class="add-row">${adversaryPickers('add', ui.add)}
         <button data-action="add-pending">Add</button>
       </div>
-      <p class="tag">Each new adversary takes a colour its type has fewest of on the map.</p>
-      ${pendingListHtml(ui.pending, state.monsters, 'add')}
+      <p class="tag">Adversaries joining a group on the map keep its colour and continue its numbering.</p>
+      ${groupListHtml(ui.pending, state.monsters, 'add')}
       <p class="tag">${later
         ? "This round's cards are already drawn, so they act from next round."
         : 'Placed before cards are drawn, so they act this round.'}</p>
       <div class="sheet-foot">
         <button class="ghost" data-action="toggle-add">Cancel</button>
-        <button class="primary" data-action="place-adversaries" ${ui.pending.length ? '' : 'disabled'}>Place ${ui.pending.length || ''}</button>
+        <button class="primary" data-action="place-adversaries" ${ui.pending.length ? '' : 'disabled'}>Place ${ui.pending.reduce((n, g) => n + g.count, 0) || ''}</button>
       </div>
     </section>`;
   }
@@ -604,17 +587,22 @@ document.addEventListener('click', (ev) => {
     case 'create-campaign': createCampaign(); return;
     case 'start-setup': startSetup(c); return;
     case 'continue-mission': go('mission'); return;
-    case 'setup-add': addPending(c.setup.adversaries, [], ui.add.typeId, ui.add.level, ui.add.count); break;
-    case 'add-pending': addPending(ui.pending, state.monsters, ui.add.typeId, ui.add.level, ui.add.count); break;
+    case 'setup-add': addGroup(c.setup.adversaries, [], ui.add.typeId, ui.add.level, ui.add.count); break;
+    case 'add-pending': addGroup(ui.pending, state.monsters, ui.add.typeId, ui.add.level, ui.add.count); break;
     case 'pick-color': {
-      const [list, onMap] = btn.dataset.scope === 'setup' ? [c.setup.adversaries, []] : [ui.pending, state.monsters];
-      choosePendingColor(list, Number(btn.dataset.index), Number(btn.dataset.color), onMap);
+      const list = btn.dataset.scope === 'setup' ? c.setup.adversaries : ui.pending;
+      list[Number(btn.dataset.index)].color = Number(btn.dataset.color);
+      break;
+    }
+    case 'group-count': {
+      const list = btn.dataset.scope === 'setup' ? c.setup.adversaries : ui.pending;
+      const g = list[Number(btn.dataset.index)];
+      g.count = Math.max(1, Math.min(12, g.count + Number(btn.dataset.delta)));
       break;
     }
     case 'remove-pending': {
-      const [list, onMap] = btn.dataset.scope === 'setup' ? [c.setup.adversaries, []] : [ui.pending, state.monsters];
-      const [gone] = list.splice(Number(btn.dataset.index), 1);
-      rebalance(list, gone.typeId, onMap);
+      const list = btn.dataset.scope === 'setup' ? c.setup.adversaries : ui.pending;
+      list.splice(Number(btn.dataset.index), 1);
       break;
     }
     case 'start-mission': startMission(c); return;

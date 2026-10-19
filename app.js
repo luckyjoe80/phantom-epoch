@@ -60,7 +60,7 @@ function newMissionState(characters, name) {
 
 // Combat fields every figure carries.
 function combatFields() {
-  return { statuses: [], hold: {}, used: [], effects: [], pierce: 0, fumbled: false, attackedThisTurn: false, convertedAttack: false };
+  return { statuses: [], hold: {}, used: [], effects: [], pierce: 0, fumbled: false, attackedThisTurn: false, convertedAttack: false, mp: false };
 }
 
 // A character as they start a mission: full HP, all 10 cards in hand.
@@ -89,14 +89,16 @@ function makePlayer(ch) {
 function makeMonster(typeId, level, joinsRound, color = null) {
   const type = ADV[typeId];
   const n = state.nextMonsterId++;
+  const num = nextGroupNumber(typeId);
   const m = {
     id: `m${n}`,
-    name: `${type.name} #${n}`,
+    name: `${type.name} ${num}`,
+    num, // number within its group
     typeId,
     level,
     speciesId: type.speciesId,
     classId: type.classId,
-    color: color ?? pickColor(type.speciesId, type.classId),
+    color: groupColor(typeId) ?? color ?? freeGroupColor(),
     hp: type.levels[level].hp,
     joinsRound,
     ...combatFields(),
@@ -122,6 +124,17 @@ function normalizeMission(m) {
     mission.monsterDecks = Object.fromEntries(Object.entries(mission.monsterDecks)
       .filter(([key]) => { const [kind, id] = key.split(':'); return (kind === 'species' ? MSPECIES : MCLASSES)[id]; }));
     mission.log.unshift({ round: mission.round, msg: `Removed ${dropped.length} placeholder adversar${dropped.length === 1 ? 'y' : 'ies'} — place real ones with + Adversary` });
+  }
+  // Adversaries saved before groups: number them within their group and give
+  // every member the group's colour (the first member's).
+  for (const m of mission.monsters) {
+    if (m.num) continue;
+    const group = mission.monsters.filter((x) => x.typeId === m.typeId);
+    group.forEach((x, k) => {
+      x.num = k + 1;
+      x.color = group[0].color;
+      x.name = `${ADV[x.typeId].name} ${x.num}`;
+    });
   }
   // Drawn cards or deck piles that refer to cards no longer in the data
   // (e.g. placeholders replaced by real cards) are dropped.
@@ -286,13 +299,24 @@ function drawForType(speciesId, classId) {
   state.typeDraws[key] = { species: drawFrom(`species:${speciesId}`), class: drawFrom(`class:${classId}`) };
 }
 
-// HP-base colour for a new adversary: the colour its type has fewest of.
-function pickColor(speciesId, classId) {
-  const counts = ADVERSARY_COLORS.map(() => 0);
-  state.monsters
-    .filter((m) => m.hp > 0 && m.speciesId === speciesId && m.classId === classId)
-    .forEach((m) => { counts[m.color] += 1; });
-  return counts.indexOf(Math.min(...counts));
+// ---- Adversary groups ----------------------------------------------------
+// All adversaries of one type form a group: one colour, numbered 1, 2, 3…
+
+// The colour an existing group already uses, or null.
+function groupColor(typeId) {
+  const member = state.monsters.find((m) => m.typeId === typeId);
+  return member ? member.color : null;
+}
+
+// The next member number in a group (numbers aren't reused within a mission).
+function nextGroupNumber(typeId) {
+  return Math.max(0, ...state.monsters.filter((m) => m.typeId === typeId).map((m) => m.num || 0)) + 1;
+}
+
+// A colour no group on the map uses yet (or the first, if all four are taken).
+function freeGroupColor(taken = state.monsters.map((m) => m.color)) {
+  const i = ADVERSARY_COLORS.findIndex((_, ci) => !taken.includes(ci));
+  return i < 0 ? 0 : i;
 }
 
 // ---- Phase flow ----------------------------------------------------------
@@ -399,8 +423,9 @@ function initiativeOrder() {
   });
   state.monsters.forEach((m, i) => {
     if (m.hp > 0 && !waiting(m)) {
+      // Ties: by the colour's line on the class card, then by number in the group.
       const row = monsterCards(m).length ? classLine(m).row : m.color;
-      entries.push({ id: m.id, player: false, i: row * 1000 + i, ap: monsterAp(m) ?? Infinity });
+      entries.push({ id: m.id, player: false, i: row * 1000 + (m.num || i), ap: monsterAp(m) ?? Infinity });
     }
   });
   entries.sort((a, b) => a.ap - b.ap || (a.player === b.player ? a.i - b.i : a.player ? -1 : 1));
@@ -423,6 +448,24 @@ function cardHtml(card, { attrs = '', cls = '', label = '', cost = card.ap } = {
 function colorDot(m) {
   const col = ADVERSARY_COLORS[m.color];
   return `<span class="color-dot" style="background:${col.css}" title="${esc(col.name)} HP base"></span>`;
+}
+
+// A figure's number and colour: players are orange 1–4, adversaries are
+// numbered within their group in the group's colour.
+function figureNumber(kind, c) {
+  return kind === 'player' ? state.players.findIndex((p) => p.id === c.id) + 1 : c.num;
+}
+
+function figureToken(kind, c) {
+  const css = kind === 'player' ? PLAYER_COLOR : ADVERSARY_COLORS[c.color].css;
+  const title = kind === 'player' ? 'Character' : `${ADVERSARY_COLORS[c.color].name} group`;
+  return `<span class="fig-token" style="--tok:${css}" title="${esc(title)}">${figureNumber(kind, c)}</span>`;
+}
+
+// Name followed by its numbered token, e.g. "Rogue ①" or "Grallok Archer ②".
+function figureName(kind, c) {
+  const base = kind === 'player' ? c.name : ADV[c.typeId].name;
+  return `<span class="fig-name">${esc(base)} ${figureToken(kind, c)}</span>`;
 }
 
 function hpControls(kind, id, hp, max) {
@@ -608,7 +651,7 @@ function renderPlayersPhase() {
     const sub = `${esc(PCLASSES[p.classId].name)} · ${status}`;
     return `<button role="tab" class="tab ${i === state.activePlayer ? 'active' : ''} ${isReady(p) ? 'ready' : ''}"
         aria-selected="${i === state.activePlayer}" data-action="tab" data-index="${i}">
-      <span class="tab-name">${esc(p.name)}</span>
+      <span class="tab-name">${figureName('player', p)}</span>
       <span class="tab-sub">${sub}</span>
     </button>`;
   }).join('');
@@ -691,7 +734,7 @@ function renderMonstersPhase() {
     const ap = monsterAp(m);
     return `<article class="monster-row ${m.hp <= 0 ? 'down' : ''}">
       <header class="mrow-head">
-        <h3 class="monster-name">${colorDot(m)}${esc(m.name)}</h3>
+        <h3 class="monster-name">${figureName('monster', m)}</h3>
         <span class="tag">${esc(subtitle('monster', m))}</span>
         ${ap !== null && m.hp > 0 ? `<span class="mrow-ap"><b>${ap}</b> AP</span>` : ''}
         <span class="spacer"></span>
@@ -770,7 +813,8 @@ function warningsHtml(kind, c) {
   let html = w.map((t) => `<p class="warn">${esc(t)}</p>`).join('');
   if (has(c, 'knocked')) {
     html += `<p class="warn">Knocked Down — cannot Attack or take non-Move/Leap actions until spending 1 MP.
-      <button class="small" data-action="stand" data-kind="${kind}" data-id="${c.id}">Stand up (1 MP)</button></p>`;
+      ${c.mp ? `<button class="small" data-action="stand" data-kind="${kind}" data-id="${c.id}">Stand up (spend 1 MP)</button>`
+        : '<span class="muted">Play a card with Move or Leap, or convert a card to movement, to get the MP to stand.</span>'}</p>`;
   }
   return html;
 }
@@ -871,8 +915,7 @@ function partSectionHtml(att, A, index, number, total) {
     return `<div class="atk-target ${kind} ${selected ? 'selected' : ''} ${hidden ? 'hidden' : ''}">
       <label class="atk-pick">
         <input type="checkbox" ${data} data-action="atk-target" data-char="${c.id}" ${selected ? 'checked' : ''} ${hidden || (full && !selected) || missed ? 'disabled' : ''}>
-        ${kind === 'monster' ? colorDot(c) : ''}
-        <span class="atk-name">${esc(c.name)}</span>
+        <span class="atk-name">${figureName(kind, c)}</span>
         <span class="tag">${support
           ? `${c.id === A.c.id ? 'Self · ' : ''}${c.hp}/${maxHp(kind, c)} HP${kind === 'player' ? ` · Bandages ${c.bandages}/${BANDAGE_SLOTS}` : ''}`
           : `${c.hp} HP · Guard ${guardAgainst(kind, c).value}`}${hidden ? ' · Invisible — cannot be targeted' : ''}</span>
@@ -995,7 +1038,7 @@ function renderInitiativePhase() {
     return `<li><button class="order-item ${cls}" data-action="view" data-char="${c.id}"
         ${i === state.turn ? 'aria-current="step"' : ''}>
       <span class="order-ap">${charAp(kind, c)}</span>
-      <span class="order-name">${kind === 'monster' ? colorDot(c) : ''}${esc(c.name)}</span>
+      <span class="order-name">${figureName(kind, c)}</span>
       <span class="order-hp">${status}</span>
       ${i === viewIdx && i !== state.turn ? '<span class="view-tag">Viewing</span>' : ''}
       ${c.statuses.length ? `<span class="order-tags">${statusTagsHtml(c)}</span>` : ''}
@@ -1029,7 +1072,7 @@ function renderInitiativePhase() {
       <div class="init-ap"><span>${charAp(kind, c)}</span>AP</div>
       <div class="init-title">
         ${when}
-        <span class="init-name">${kind === 'monster' ? colorDot(c) : ''}${esc(c.name)}${c.hp <= 0 ? ' <small>(down)</small>' : ''}</span>
+        <span class="init-name">${figureName(kind, c)}${c.hp <= 0 ? ' <small>(down)</small>' : ''}</span>
         <span class="tag">${esc(subtitle(kind, c))}</span>
       </div>
       <div class="board-quick">

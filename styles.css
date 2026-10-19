@@ -954,3 +954,22 @@ details > summary { list-style: none; }
 }
 .foot-hint { margin-right: auto; align-self: center; }
 .part-num { white-space: nowrap; flex: none; }
+
+/* ---- Numbered figure tokens (players orange, adversary groups by colour) ---- */
+.fig-name { display: inline-flex; align-items: center; gap: 6px; }
+.fig-token {
+  display: inline-grid; place-items: center;
+  min-width: 22px; height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--tok);
+  color: #111;
+  font-size: 13px; font-weight: 800; line-height: 1;
+  border: 2px solid #fff6;
+}
+.init-name .fig-token, .monster-name .fig-token { min-width: 26px; height: 26px; font-size: 15px; }
+.order-item.current .fig-token { border-color: #fff; }
+.group-row b:first-child { flex: 1 1 160px; }
+.group-count { display: inline-flex; align-items: center; gap: 8px; }
+.group-count b { min-width: 20px; text-align: center; }
+.group-nums { display: inline-flex; gap: 4px; }
