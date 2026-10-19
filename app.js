@@ -56,6 +56,8 @@ function newMissionState(characters, name) {
     eventDeck: buildEventDeck(), // event ids, top of the deck last
     eventDiscard: [],
     event: null, // this round's Event card id
+    eventRolls: {}, // character ids that already rolled for this round's event
+    eventDeckEmpty: false, // no event could be drawn: the mission is lost
     log: [],
     nextMonsterId: 1,
   };
@@ -71,26 +73,90 @@ function buildEventDeck() {
   return [...shuffle(EVENTS_LATE.map((e) => e.id)), ...early];
 }
 
-// Draw the round's event. The deck lasts 15 rounds; past that, the Round 6+
-// events already drawn (except the one just ending) are reshuffled into a new deck.
+// This round's event's effect ({} if none).
+function eventEffect() {
+  return (EVENTS[state.event] || {}).effect || {};
+}
+
+// Max AP for the round: the species' AP, changed by the event.
+function maxAp(p) {
+  const fx = eventEffect();
+  return PSPECIES[p.speciesId].ap + (fx.type === 'maxAp' ? fx.value : 0);
+}
+
+const isLateEvent = (id) => EVENTS_LATE.some((e) => e.id === id);
+
+// Draw the round's event. If the deck is empty, the mission is lost.
 function drawEvent() {
-  if (!state.eventDeck.length) {
-    state.eventDeck = shuffle(state.eventDiscard.filter((id) => EVENTS_LATE.some((e) => e.id === id)));
-    state.eventDiscard = [];
-  }
   if (state.event) state.eventDiscard.push(state.event);
+  state.eventRolls = {};
   state.event = state.eventDeck.pop() || null;
-  if (state.event) log(`Event: ${EVENTS[state.event].name}`);
+  state.eventDeckEmpty = !state.event;
+  log(state.event ? `Event: ${EVENTS[state.event].name}` : 'The Event deck is empty — the mission is lost');
+}
+
+// Round-end effects of the event, before the next one is drawn.
+function endRoundEvent() {
+  const fx = eventEffect();
+  if (fx.type === 'evac') {
+    const down = state.players.filter((p) => p.hp <= 0);
+    if (down.length) log(`Emergency Evac: ${down.map((p) => p.name).join(', ')} defeated — the mission is lost unless all objectives are complete`);
+  }
+  if (fx.type === 'oldWounds' && state.players.some((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS)) {
+    // This and every other drawn Round 6+ event go back on top, shuffled.
+    const back = [state.event, ...state.eventDiscard.filter(isLateEvent)];
+    state.eventDiscard = state.eventDiscard.filter((id) => !isLateEvent(id));
+    state.eventDeck.push(...shuffle(back));
+    state.event = null;
+    log(`Old Wounds: a surviving character has an empty bandage slot — ${back.length} Round 6+ event${back.length === 1 ? '' : 's'} shuffled back onto the Event deck`);
+  }
+}
+
+// Live notes and controls for the event's effect.
+function eventHelpHtml(fx) {
+  if (fx.type === 'mission') return '<p class="event-help">Perform this mission\'s mission event from the Mission book.</p>';
+  if (fx.type === 'restDamage') {
+    const resting = state.players.filter((p) => p.resting);
+    return `<p class="event-help">Applied automatically on each rest turn${resting.length ? ` — resting: ${resting.map((p) => esc(p.name)).join(', ')}` : ''}.</p>`;
+  }
+  if (fx.type === 'maxAp') return '<p class="event-help">Applied to every character\'s AP this round.</p>';
+  if (fx.type === 'evac') {
+    const down = state.players.filter((p) => p.hp <= 0);
+    return `<p class="event-help ${down.length ? 'warn' : ''}">${down.length ? `${down.map((p) => esc(p.name)).join(', ')} defeated — unless all objectives are complete, the mission is lost when the round ends.` : 'No character is defeated.'}</p>`;
+  }
+  if (fx.type === 'tooQuiet') {
+    return state.monsters.some((m) => m.hp > 0)
+      ? '<p class="event-help">Enemies are present, so nothing happens.</p>'
+      : '<p class="event-help warn">No enemies are present: every character rolls the Blitz die. Place an event adversary next to each who rolls a Fumble (+ Adversary).</p>';
+  }
+  if (fx.type === 'oldWounds') {
+    const rollers = state.players.filter((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS);
+    if (!rollers.length) return '<p class="event-help">No character has an empty bandage slot — the event will not reshuffle.</p>';
+    return `<div class="event-help">Roll the Blitz die for each character with an empty bandage slot:
+      <div class="event-rolls">${rollers.map((p) => state.eventRolls[p.id]
+        ? `<span class="tag">${esc(p.name)}: rolled</span>`
+        : `<span class="event-roll">${figureName('player', p)}
+            <button class="small" data-action="event-roll" data-id="${p.id}" data-value="fumble">Fumble: +1 bandage</button>
+            <button class="small ghost" data-action="event-roll" data-id="${p.id}" data-value="other">Other result</button></span>`).join('')}</div>
+      <p class="tag">If a surviving character still has an empty bandage slot when the round ends, this and every drawn Round 6+ event are shuffled back onto the Event deck.</p></div>`;
+  }
+  return '';
 }
 
 function eventBannerHtml() {
+  if (state.eventDeckEmpty) {
+    return `<section class="event-banner lost" aria-label="This round's event">
+      <b class="event-name">The Event deck is empty</b>
+      <p class="event-text">No Event card could be drawn at the start of the round, so the mission is lost.</p>
+    </section>`;
+  }
   const e = EVENTS[state.event];
   if (!e) return '';
-  const early = EVENTS_EARLY.includes(e);
   return `<section class="event-banner" aria-label="This round's event">
-    <span class="section-label">Round ${state.round} event · ${early ? 'Round 1–5' : 'Round 6+'} #${e.number}</span>
+    <span class="section-label">Round ${state.round} event · ${isLateEvent(e.id) ? 'Round 6+' : 'Round 1–5'}</span>
     <b class="event-name">${esc(e.name)}</b>
     <p class="event-text">${esc(e.text)}</p>
+    ${eventHelpHtml(e.effect || {})}
     <span class="tag">${state.eventDeck.length} left in the Event deck</span>
   </section>`;
 }
@@ -175,10 +241,11 @@ function normalizeMission(m) {
   }
   // Missions from before events, or whose events were placeholders since
   // replaced, get a fresh Event deck and draw this round's event.
-  if (!mission.event || ![mission.event, ...mission.eventDeck, ...mission.eventDiscard].every((id) => EVENTS[id])) {
+  if ((!mission.event && !mission.eventDeckEmpty) || ![mission.event, ...mission.eventDeck, ...mission.eventDiscard].filter(Boolean).every((id) => EVENTS[id])) {
     mission.eventDeck = buildEventDeck();
     mission.eventDiscard = [];
     mission.event = mission.eventDeck.pop();
+    mission.eventDeckEmpty = false;
   }
   // Drawn cards or deck piles that refer to cards no longer in the data
   // (e.g. placeholders replaced by real cards) are dropped.
@@ -445,6 +512,7 @@ function endRound() {
   }
   state.typeDraws = {};
   for (const m of state.monsters) m.used = [];
+  endRoundEvent();
   state.round += 1;
   drawEvent();
   state.phase = 'players';
@@ -698,7 +766,7 @@ function renderPlayersPhase() {
   const active = state.players[state.activePlayer];
   const tabs = state.players.map((p, i) => {
     const species = PSPECIES[p.speciesId];
-    const status = p.hp <= 0 ? 'Down' : p.resting ? 'Resting' : `${selectedAp(p)} / ${species.ap} AP`;
+    const status = p.hp <= 0 ? 'Down' : p.resting ? 'Resting' : `${selectedAp(p)} / ${maxAp(p)} AP`;
     const sub = `${esc(PCLASSES[p.classId].name)} · ${status}`;
     return `<button role="tab" class="tab ${i === state.activePlayer ? 'active' : ''} ${isReady(p) ? 'ready' : ''}"
         aria-selected="${i === state.activePlayer}" data-action="tab" data-index="${i}">
@@ -710,7 +778,8 @@ function renderPlayersPhase() {
   const p = active;
   const species = PSPECIES[p.speciesId];
   const spent = selectedAp(p);
-  const left = species.ap - spent;
+  const max = maxAp(p);
+  const left = max - spent;
   const hand = p.hand.map((cid) => {
     const card = playerCard(p, cid);
     const cost = cardCost(p, card);
@@ -738,8 +807,8 @@ function renderPlayersPhase() {
     <div class="sheet-main">
     <div class="ap-row">
       <div class="ap-meter">
-        <span class="ap-big">${p.resting ? 'Resting <small>(initiative 1)</small>' : `${spent} <small>/ ${species.ap} AP</small>`}</span>
-        <div class="bar"><div class="fill" style="width:${p.resting ? 0 : Math.min(100, (spent / species.ap) * 100)}%"></div></div>
+        <span class="ap-big">${p.resting ? 'Resting <small>(initiative 1)</small>' : `${spent} <small>/ ${max} AP${max !== species.ap ? ` (${esc(EVENTS[state.event].name)})` : ''}</small>`}</span>
+        <div class="bar"><div class="fill" style="width:${p.resting ? 0 : Math.min(100, (spent / max) * 100)}%"></div></div>
       </div>
       <button class="rest-btn ${p.resting ? 'active' : ''}" data-action="rest" data-id="${p.id}"
         ${p.hp <= 0 || (noRest && !p.resting) ? 'disabled' : ''} aria-pressed="${p.resting}"
@@ -1236,6 +1305,15 @@ document.addEventListener('click', (ev) => {
     case 'bandage': {
       const p = findChar('player', id);
       p.bandages = Math.max(0, Math.min(BANDAGE_SLOTS, p.bandages + Number(btn.dataset.delta)));
+      break;
+    }
+    case 'event-roll': {
+      const p = findChar('player', id);
+      state.eventRolls[p.id] = true;
+      if (btn.dataset.value === 'fumble') {
+        p.bandages = Math.min(BANDAGE_SLOTS, p.bandages + 1);
+        log(`Old Wounds: ${p.name} rolls a Fumble and receives 1 bandage`);
+      }
       break;
     }
     case 'end-effect': {

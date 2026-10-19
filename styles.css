@@ -991,3 +991,8 @@ details > summary { list-style: none; }
 .event-banner .tag { grid-column: 2; grid-row: 1; align-self: start; }
 .event-name { grid-column: 1 / -1; font-size: 17px; }
 .event-text { grid-column: 1 / -1; margin: 0; }
+.event-help { grid-column: 1 / -1; margin: 6px 0 0; color: var(--muted); }
+.event-help.warn { color: var(--warn); }
+.event-rolls { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 6px 0; }
+.event-roll { display: inline-flex; align-items: center; gap: 6px; }
+.event-banner.lost { border-left-color: var(--danger); }

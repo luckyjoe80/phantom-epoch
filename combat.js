@@ -321,6 +321,8 @@ function startTurn(idx) {
     const bad = c.statuses.filter((s) => STATUS[s].type === 'detrimental');
     bad.forEach((s) => removeStatus(c, s));
     log(`${c.name} rests${bad.length ? ` and removes ${bad.map((s) => STATUS[s].name).join(', ')}` : ''}`);
+    const fx = eventEffect();
+    if (fx.type === 'restDamage') log(takeDamage(c, fx.value, EVENTS[state.event].name));
     return;
   }
   if (has(c, 'bleeding')) log(takeDamage(c, 2, 'Bleeding'));
