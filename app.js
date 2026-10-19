@@ -1019,8 +1019,11 @@ function roundCardsHtml(kind, c, acting) {
       const noPlay = playBlocker(kind, c, card);
       const noMove = conversionBlocker(c, 'move', card);
       const noAtk = conversionBlocker(c, 'attack');
-      buttons = `<button class="primary use-btn" data-action="use-card" data-char="${c.id}" data-card="${card.id}" ${noPlay ? `disabled title="${esc(noPlay)}"` : ''}>Play</button>
-        ${noPlay ? `<span class="tag">Can't play: ${esc(noPlay)}</span>` : ''}
+      // Its Attack can't be made, but the rest of the card can be played.
+      const skipAttack = !noPlay && hasCardAttack(card) && cardAttackBlocker(c);
+      buttons = `<button class="primary use-btn" data-action="use-card" data-char="${c.id}" data-card="${card.id}" ${noPlay ? `disabled title="${esc(noPlay)}"` : ''}>${skipAttack ? 'Play without Attack' : 'Play'}</button>
+        ${noPlay ? `<span class="tag play-note">Can't play: ${esc(noPlay)}.</span>` : ''}
+        ${skipAttack ? `<span class="tag play-note">Its Attack is skipped: ${esc(skipAttack)}.</span>` : ''}
         <div class="convert-row">
           <button class="small" data-action="convert" data-to="move" data-char="${c.id}" data-card="${card.id}" ${noMove ? `disabled title="${esc(noMove)}"` : ''}>→ Move ${convertMp(kind, c, card)}</button>
           ${kind === 'player' ? `<button class="small" data-action="convert" data-to="attack" data-char="${c.id}" data-card="${card.id}" ${noAtk ? `disabled title="${esc(noAtk)}"` : ''}>→ Attack +0</button>` : ''}

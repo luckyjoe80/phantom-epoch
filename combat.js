@@ -372,7 +372,24 @@ function endTurn(idx) {
 // Why a card can't be played (only converted) right now, or null.
 function playBlocker(kind, c, card) {
   if (card.onlyCard && roundCards(kind, c).length > 1) return 'must be the only card selected this round — discard or convert it';
+  const noAttack = cardAttackBlocker(c);
+  if (noAttack && hasCardAttack(card) && attackOnly(card)) return `${noAttack} — convert it to Move instead`;
   return null;
+}
+
+// Why Attacks on Action cards can't be made this turn, or null: after a Fumble,
+// or once a card was converted to an Attack (rulebook p.20, p.23).
+function cardAttackBlocker(c) {
+  if (c.fumbled) return 'a Fumble ended Attacks this turn';
+  if (c.convertedAttack) return 'a card was converted to an Attack this turn, so no card Attacks are allowed';
+  return null;
+}
+
+const hasCardAttack = (card) => (card.actions || []).some((a) => a.type === 'attack');
+
+// A card whose only parts are Attacks (nothing would happen without them).
+function attackOnly(card) {
+  return (card.actions || []).every((a) => a.type === 'attack') && !card.effect && !card.round;
 }
 
 // Play a card. Non-attack effects apply at once; attacks and checks open the
@@ -403,7 +420,12 @@ function useCard(kind, c, card) {
       log(`${c.name}'s next Attack gains Pierce ${a.value}`);
     }
   }
-  const queued = actions.filter((a) => ['attack', 'inflictCheck', 'trample'].includes(a.type) || (a.type === 'support' && a.who !== 'self'));
+  let queued = actions.filter((a) => ['attack', 'inflictCheck', 'trample'].includes(a.type) || (a.type === 'support' && a.who !== 'self'));
+  const noAttack = cardAttackBlocker(c);
+  if (noAttack && hasCardAttack(card)) {
+    queued = queued.filter((a) => a.type !== 'attack');
+    log(`${card.name}'s Attack is skipped: ${noAttack}`);
+  }
   // A round effect that protects adjacent allies: pick them now, as the card is played.
   if (kind === 'monster' && card.round && card.round.aura) queued.unshift({ type: 'auraAllies', round: card.round, name: card.name });
   if (queued.length) {
