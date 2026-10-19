@@ -102,13 +102,13 @@ function endRoundEvent() {
     const down = state.players.filter((p) => p.hp <= 0);
     if (down.length) log(`Emergency Evac: ${down.map((p) => p.name).join(', ')} defeated — the mission is lost unless all objectives are complete`);
   }
-  if (fx.type === 'oldWounds' && state.players.some((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS)) {
+  if (fx.reshuffle && state.players.some((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS)) {
     // This and every other drawn Round 6+ event go back on top, shuffled.
     const back = [state.event, ...state.eventDiscard.filter(isLateEvent)];
     state.eventDiscard = state.eventDiscard.filter((id) => !isLateEvent(id));
     state.eventDeck.push(...shuffle(back));
     state.event = null;
-    log(`Old Wounds: a surviving character has an empty bandage slot — ${back.length} Round 6+ event${back.length === 1 ? '' : 's'} shuffled back onto the Event deck`);
+    log(`${EVENTS[back[0]].name}: a surviving character has an empty bandage slot — ${back.length} Round 6+ event${back.length === 1 ? '' : 's'} shuffled back onto the Event deck`);
   }
 }
 
@@ -120,6 +120,10 @@ function eventHelpHtml(fx) {
     return `<p class="event-help">Applied automatically on each rest turn${resting.length ? ` — resting: ${resting.map((p) => esc(p.name)).join(', ')}` : ''}.</p>`;
   }
   if (fx.type === 'maxAp') return '<p class="event-help">Applied to every character\'s AP this round.</p>';
+  if (fx.type === 'restDiscard') {
+    const resting = state.players.filter((p) => p.resting);
+    return `<p class="event-help">Applied automatically when the round ends, after resting characters recover their cards${resting.length ? ` — resting: ${resting.map((p) => esc(p.name)).join(', ')}` : ''}.</p>`;
+  }
   if (fx.type === 'evac') {
     const down = state.players.filter((p) => p.hp <= 0);
     return `<p class="event-help ${down.length ? 'warn' : ''}">${down.length ? `${down.map((p) => esc(p.name)).join(', ')} defeated — unless all objectives are complete, the mission is lost when the round ends.` : 'No character is defeated.'}</p>`;
@@ -129,16 +133,17 @@ function eventHelpHtml(fx) {
       ? '<p class="event-help">Enemies are present, so nothing happens.</p>'
       : '<p class="event-help warn">No enemies are present: every character rolls the Blitz die. Place an event adversary next to each who rolls a Fumble (+ Adversary).</p>';
   }
-  if (fx.type === 'oldWounds') {
+  if (fx.type === 'bandageRoll') {
     const rollers = state.players.filter((p) => p.hp > 0 && p.bandages < BANDAGE_SLOTS);
-    if (!rollers.length) return '<p class="event-help">No character has an empty bandage slot — the event will not reshuffle.</p>';
-    return `<div class="event-help">Roll the Blitz die for each character with an empty bandage slot:
+    if (!rollers.length) return `<p class="event-help">No character has an empty bandage slot${fx.reshuffle ? ' — the event will not reshuffle' : ''}.</p>`;
+    const die = ATTACK_DICE.find((d) => d.id === fx.die);
+    return `<div class="event-help">Roll the ${die.name} for each character with an empty bandage slot:
       <div class="event-rolls">${rollers.map((p) => state.eventRolls[p.id]
         ? `<span class="tag">${esc(p.name)}: rolled</span>`
         : `<span class="event-roll">${figureName('player', p)}
             <button class="small" data-action="event-roll" data-id="${p.id}" data-value="fumble">Fumble: +1 bandage</button>
             <button class="small ghost" data-action="event-roll" data-id="${p.id}" data-value="other">Other result</button></span>`).join('')}</div>
-      <p class="tag">If a surviving character still has an empty bandage slot when the round ends, this and every drawn Round 6+ event are shuffled back onto the Event deck.</p></div>`;
+      ${fx.reshuffle ? '<p class="tag">If a surviving character still has an empty bandage slot when the round ends, this and every drawn Round 6+ event are shuffled back onto the Event deck.</p>' : ''}</div>`;
   }
   return '';
 }
@@ -496,6 +501,11 @@ function endRound() {
     if (p.resting) {
       p.hand.push(...p.discard);
       p.discard = [];
+      if (eventEffect().type === 'restDiscard' && p.hand.length) {
+        const [lost] = p.hand.splice(Math.floor(Math.random() * p.hand.length), 1);
+        p.discard.push(lost);
+        log(`${EVENTS[state.event].name}: ${p.name} randomly discards ${playerCard(p, lost).name}`);
+      }
     } else {
       p.hand = p.hand.filter((id) => !p.selected.includes(id));
       p.discard.push(...p.selected.filter((id) => !p.effects.some((e) => e.cardId === id)));
@@ -1312,7 +1322,7 @@ document.addEventListener('click', (ev) => {
       state.eventRolls[p.id] = true;
       if (btn.dataset.value === 'fumble') {
         p.bandages = Math.min(BANDAGE_SLOTS, p.bandages + 1);
-        log(`Old Wounds: ${p.name} rolls a Fumble and receives 1 bandage`);
+        log(`${EVENTS[state.event].name}: ${p.name} rolls a Fumble and receives 1 bandage`);
       }
       break;
     }

@@ -692,24 +692,39 @@ const DIE_RESULT_LABELS = { 2: '2', 3: '3', 4: '4', 5: '5', crit: 'Critical Stri
 //   { id, name, text, effect? }  effects the app applies or tracks:
 //     { type: 'mission' }              refers to the mission book's mission event
 //     { type: 'restDamage', value }    resting characters take damage after resting
+//     { type: 'restDiscard' }          resting characters randomly discard one card after resting
 //     { type: 'maxAp', value }         added to every character's max AP
 //     { type: 'evac' }                 a defeated character at round end loses the mission
 //     { type: 'tooQuiet' }             only applies when no enemies are present
-//     { type: 'oldWounds' }            bandage rolls; reshuffles drawn 6+ events at round end
-function placeholderEvents(prefix, label) {
-  return Array.from({ length: 10 }, (_, i) => ({
-    id: `${prefix}-${i + 1}`,
-    name: `${label} Event ${i + 1}`,
-    text: 'Card text to be defined.',
-  }));
-}
+//     { type: 'bandageRoll', die, reshuffle? }  characters with an empty bandage slot
+//         roll that Attack die and receive a bandage on a Fumble; `reshuffle` puts
+//         this and the drawn 6+ events back on the deck at round end (Old Wounds)
 const TOO_QUIET = {
   name: 'Too Quiet',
   text: 'If no enemies are present: Every character rolls the Blitz Attack die. Place 1 event adversary in the closest empty space to each character that rolls a Fumble.',
   effect: { type: 'tooQuiet' },
 };
 const SOMETHING_HAPPENING = { name: 'Something is Happening', text: 'Mission event.', effect: { type: 'mission' } };
-const EVENTS_EARLY = placeholderEvents('event-early', 'Round 1–5');
+const QUIET = { name: 'Quiet', text: 'Nothing happens.' };
+const SOMETHINGS_HAPPENING = { name: "Something's Happening", text: 'Mission event.', effect: { type: 'mission' } };
+const EVENTS_EARLY = [
+  { id: 'quiet-1', ...QUIET },
+  { id: 'quiet-2', ...QUIET },
+  { id: 'quiet-3', ...QUIET },
+  { id: 'quiet-4', ...QUIET },
+  { id: 'quiet-5', ...QUIET },
+  { id: 'somethings-happening-1', ...SOMETHINGS_HAPPENING },
+  { id: 'somethings-happening-2', ...SOMETHINGS_HAPPENING },
+  { id: 'adrenaline-rush', name: 'Adrenaline Rush',
+    text: 'All characters have +1 max AP for the round.',
+    effect: { type: 'maxAp', value: 1 } },
+  { id: 'interrupted-rest', name: 'Interrupted Rest',
+    text: 'Any character that rests this round randomly discards one Action card after resting.',
+    effect: { type: 'restDiscard' } },
+  { id: 'sore-muscles', name: 'Sore Muscles',
+    text: 'Every character that has an empty bandage slot rolls the Basic Attack die. If a Fumble is rolled, the character receives 1 bandage.',
+    effect: { type: 'bandageRoll', die: 'basic' } },
+];
 const EVENTS_LATE = [
   { id: 'something-happening-1', ...SOMETHING_HAPPENING },
   { id: 'something-happening-2', ...SOMETHING_HAPPENING },
@@ -727,7 +742,7 @@ const EVENTS_LATE = [
     text: 'Every character that has an empty bandage slot rolls the Blitz Attack die. If a Fumble is rolled, the character receives 1 bandage. '
       + 'At the end of the round, if any surviving character has at least one empty bandage slot, shuffle this and all other drawn Round 6+ Event cards back onto the Event deck. '
       + 'If players are ever unable to draw an Event card at the start of a round because the Event deck is empty, the mission is immediately lost.',
-    effect: { type: 'oldWounds' } },
+    effect: { type: 'bandageRoll', die: 'blitz', reshuffle: true } },
   { id: 'adrenaline-crash', name: 'Adrenaline Crash',
     text: 'All characters have -1 max AP for the round.',
     effect: { type: 'maxAp', value: -1 } },
