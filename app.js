@@ -452,6 +452,12 @@ function colorDot(m) {
 
 // A figure's number and colour: players are orange 1–4, adversaries are
 // numbered within their group in the group's colour.
+// The distinct Attack die results: numbers low to high, then Critical Strike and Fumble.
+function dieResults() {
+  const unique = [...new Set(ATTACK_DIE_FACES)];
+  return [...unique.filter((r) => !isNaN(r)).sort((a, b) => a - b), ...unique.filter((r) => isNaN(r))];
+}
+
 function figureNumber(kind, c) {
   return kind === 'player' ? state.players.findIndex((p) => p.id === c.id) + 1 : c.num;
 }
@@ -885,13 +891,10 @@ function partSectionHtml(att, A, index, number, total) {
         ${preview(c)}
       </div>`;
     } else if (selected && !missed) {
-      const special = t.roll === 'crit' || t.roll === 'fumble';
       inputs = `<div class="atk-inputs">
         <div class="atk-line">
           <span class="atk-label">Attack die</span>
-          <input type="number" class="roll-input" ${data} data-action="atk-roll" data-char="${c.id}" value="${special ? '' : esc(t.roll)}" placeholder="#" inputmode="numeric">
-          ${seg('atk-die', c.id, 'crit', 'Critical Strike', t.roll === 'crit')}
-          ${seg('atk-die', c.id, 'fumble', 'Fumble', t.roll === 'fumble')}
+          ${dieResults().map((r) => seg('atk-die', c.id, r, DIE_RESULT_LABELS[r], String(t.roll) === r)).join('')}
           ${t.roll === 'fumble' && A.kind === 'player' ? `<label class="atk-bonus"><input type="checkbox" ${data} data-action="atk-convert" data-char="${c.id}" ${t.convert ? 'checked' : ''}> Convert to 0 by becoming Knocked Down</label>` : ''}
           ${(t.roll === 'crit' || action.critOnSuccess) && A.kind === 'player' && critOptions(A).length > 1 ? `<div class="atk-line">
             <span class="atk-label">Critical ability</span>
@@ -1293,8 +1296,6 @@ document.addEventListener('change', (ev) => {
     case 'atk-stun':
       partData(state.attack, Number(el.dataset.step)).targets[el.dataset.char].stunInstead = el.checked;
       break;
-    case 'atk-roll':
-      break; // stored on input; re-render to refresh everything
     case 'atk-field': {
       const step = Number(el.dataset.step);
       const a = state.attack.actions[step];
@@ -1311,21 +1312,6 @@ document.addEventListener('change', (ev) => {
   commit();
 });
 
-// Attack die numbers update their preview live without redrawing (keeps focus).
-document.addEventListener('input', (ev) => {
-  const el = ev.target;
-  if (el.dataset.action !== 'atk-roll' || !state.attack) return;
-  const step = Number(el.dataset.step);
-  const t = partData(state.attack, step).targets[el.dataset.char];
-  t.roll = el.value;
-  t.convert = false;
-  saveRoot();
-  const preview = document.querySelector(`[data-preview="${step}:${el.dataset.char}"]`);
-  if (preview) preview.textContent = withPart(state.attack, step, () => resolveTarget(state.attack, el.dataset.char).text);
-  el.closest('.atk-line').querySelectorAll('[data-action="atk-die"]').forEach((b) => b.classList.remove('active'));
-  const apply = document.querySelector('[data-action="atk-apply"]');
-  if (apply) apply.disabled = !allPartsReady(state.attack);
-});
 
 // <details> toggles don't bubble; listen in the capture phase.
 document.addEventListener('toggle', (ev) => {
