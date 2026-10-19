@@ -283,6 +283,8 @@ function normalizeMission(m) {
       .filter(([key]) => { const [kind, id] = key.split(':'); return (kind === 'species' ? MSPECIES : MCLASSES)[id]; }));
     mission.log.unshift({ round: mission.round, msg: `Removed ${dropped.length} placeholder adversar${dropped.length === 1 ? 'y' : 'ies'} — place real ones with + Adversary` });
   }
+  // Adversaries already defeated in older saves count as removed (no dialog).
+  for (const m of mission.monsters) if (m.hp <= 0 && m.removed === undefined) m.removed = true;
   // Adversaries saved before groups: number them within their group and give
   // every member the group's colour (the first member's).
   for (const m of mission.monsters) {
@@ -335,8 +337,62 @@ function normalizeMission(m) {
 }
 
 function commit() {
+  const defeated = state ? removeDefeated() : [];
   saveRoot();
   render();
+  if (defeated.length) showDefeatDialog(defeated);
+}
+
+// Adversaries defeated since the last save leave the initiative list at once
+// (rulebook p.27). One defeated on its own turn stays listed until the turn
+// moves on, so the turn marker isn't disturbed. Returns the newly defeated.
+function removeDefeated() {
+  // HP set back above 0 by hand: it can be defeated (and removed) again.
+  state.monsters.filter((m) => m.removed && m.hp > 0).forEach((m) => { m.removed = false; });
+  const gone = state.monsters.filter((m) => m.hp <= 0 && !m.removed);
+  for (const m of gone) {
+    m.removed = true;
+    if (state.viewing === m.id) state.viewing = null;
+    log(`${m.name} is defeated and removed from the board`);
+  }
+  pruneOrder();
+  return gone;
+}
+
+// Take removed adversaries out of the initiative list, except one whose turn it is.
+function pruneOrder() {
+  for (let i = state.order.length - 1; i >= 0; i--) {
+    const m = state.monsters.find((x) => x.id === state.order[i]);
+    if (!m || !m.removed || (state.phase === 'initiative' && i === state.turn)) continue;
+    state.order.splice(i, 1);
+    if (i < state.turn) state.turn -= 1;
+  }
+}
+
+function showDefeatDialog(defeated) {
+  const dialog = document.getElementById('defeat-dialog');
+  const items = defeated.map((m) => {
+    const col = ADVERSARY_COLORS[m.color].name;
+    const lastOfType = !state.monsters.some((x) => x.typeId === m.typeId && x.hp > 0);
+    const novas = m.level;
+    return `<li>
+      <b>Remove ${figureName('monster', m)} (${esc(col)}) from the board.</b>
+      <ul>
+        <li>Place ${novas} nova cell${novas === 1 ? '' : 's'} in its space — none if it was placed by an Event card or mission event.</li>
+        ${lastOfType ? `<li>It was the last ${esc(ADV[m.typeId].name)}: discard its Adversary Action cards.</li>` : ''}
+      </ul>
+    </li>`;
+  }).join('');
+  // A second kill while the dialog is open adds to the same list.
+  const list = dialog.open && dialog.querySelector('.defeat-list');
+  if (list) {
+    list.insertAdjacentHTML('beforeend', items);
+    return;
+  }
+  dialog.innerHTML = `<h2 id="defeat-title">Adversar${defeated.length === 1 ? 'y' : 'ies'} defeated</h2>
+    <ul class="defeat-list">${items}</ul>
+    <div class="dialog-actions"><button class="primary" data-action="defeat-done">Done</button></div>`;
+  dialog.showModal();
 }
 
 // ---- Lookups -------------------------------------------------------------
@@ -1345,6 +1401,9 @@ document.addEventListener('click', (ev) => {
       return;
     case 'round-end-cancel':
       document.getElementById('round-end-dialog').close();
+      return;
+    case 'defeat-done':
+      document.getElementById('defeat-dialog').close();
       return;
     case 'toggle-card': {
       const p = findChar('player', id);
