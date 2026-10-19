@@ -246,6 +246,7 @@ function startMission(campaign) {
     for (let k = 0; k < g.count; k++) state.monsters.push(makeMonster(g.typeId, g.level, 1, g.color));
   }
   log(`— ${state.name} begins with ${state.monsters.length} adversar${state.monsters.length === 1 ? 'y' : 'ies'} —`);
+  drawEvent();
   campaign.active = state;
   campaign.setup = null;
   go('mission');
@@ -540,7 +541,7 @@ function render() {
     new: renderNewCampaign,
     campaign: renderCampaign,
     setup: renderSetup,
-    mission: () => (ui.showLog ? logPanelHtml() : '') + missionPanelsHtml() + {
+    mission: () => (ui.showLog ? logPanelHtml() : '') + missionPanelsHtml() + eventBannerHtml() + {
       players: renderPlayersPhase,
       monsters: renderMonstersPhase,
       initiative: renderInitiativePhase,

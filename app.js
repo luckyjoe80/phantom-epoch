@@ -53,9 +53,46 @@ function newMissionState(characters, name) {
     attack: null, // attack being resolved (see combat.js)
     retaliations: [], // pending Vengeful counter-attacks
     auraLinks: {}, // adversary id -> allies it protects this round (picked when its card was played)
+    eventDeck: buildEventDeck(), // event ids, top of the deck last
+    eventDiscard: [],
+    event: null, // this round's Event card id
     log: [],
     nextMonsterId: 1,
   };
+}
+
+// ---- Event deck ------------------------------------------------------------
+
+const EVENTS = Object.fromEntries([...EVENTS_EARLY, ...EVENTS_LATE].map((e) => [e.id, e]));
+
+// 5 random Round 1–5 events on top of the shuffled Round 6+ events.
+function buildEventDeck() {
+  const early = shuffle(EVENTS_EARLY.map((e) => e.id)).slice(0, EARLY_EVENTS_IN_DECK);
+  return [...shuffle(EVENTS_LATE.map((e) => e.id)), ...early];
+}
+
+// Draw the round's event. The deck lasts 15 rounds; past that, the Round 6+
+// events already drawn (except the one just ending) are reshuffled into a new deck.
+function drawEvent() {
+  if (!state.eventDeck.length) {
+    state.eventDeck = shuffle(state.eventDiscard.filter((id) => EVENTS_LATE.some((e) => e.id === id)));
+    state.eventDiscard = [];
+  }
+  if (state.event) state.eventDiscard.push(state.event);
+  state.event = state.eventDeck.pop() || null;
+  if (state.event) log(`Event: ${EVENTS[state.event].name}`);
+}
+
+function eventBannerHtml() {
+  const e = EVENTS[state.event];
+  if (!e) return '';
+  const early = EVENTS_EARLY.includes(e);
+  return `<section class="event-banner" aria-label="This round's event">
+    <span class="section-label">Round ${state.round} event · ${early ? 'Round 1–5' : 'Round 6+'} #${e.number}</span>
+    <b class="event-name">${esc(e.name)}</b>
+    <p class="event-text">${esc(e.text)}</p>
+    <span class="tag">${state.eventDeck.length} left in the Event deck</span>
+  </section>`;
 }
 
 // Combat fields every figure carries.
@@ -135,6 +172,13 @@ function normalizeMission(m) {
       x.color = group[0].color;
       x.name = `${ADV[x.typeId].name} ${x.num}`;
     });
+  }
+  // Missions from before events, or whose events were placeholders since
+  // replaced, get a fresh Event deck and draw this round's event.
+  if (!mission.event || ![mission.event, ...mission.eventDeck, ...mission.eventDiscard].every((id) => EVENTS[id])) {
+    mission.eventDeck = buildEventDeck();
+    mission.eventDiscard = [];
+    mission.event = mission.eventDeck.pop();
   }
   // Drawn cards or deck piles that refer to cards no longer in the data
   // (e.g. placeholders replaced by real cards) are dropped.
@@ -402,6 +446,7 @@ function endRound() {
   state.typeDraws = {};
   for (const m of state.monsters) m.used = [];
   state.round += 1;
+  drawEvent();
   state.phase = 'players';
   state.activePlayer = 0;
   state.order = [];

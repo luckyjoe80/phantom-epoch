@@ -685,6 +685,22 @@ const ATTACK_DICE = [
 ];
 const DIE_RESULT_LABELS = { 2: '2', 3: '3', 4: '4', 5: '5', crit: 'Critical Strike', fumble: 'Fumble' };
 
+// Event cards (rulebook p.39). One is drawn at the start of every round and
+// lasts the whole round. The mission's Event deck is 5 random Round 1–5 cards
+// on top of all the Round 6+ cards, each part shuffled (setup step 8, p.11).
+//   { id, number, name, text }
+function placeholderEvents(prefix, label) {
+  return Array.from({ length: 10 }, (_, i) => ({
+    id: `${prefix}-${i + 1}`,
+    number: i + 1,
+    name: `${label} Event ${i + 1}`,
+    text: 'Card text to be defined.',
+  }));
+}
+const EVENTS_EARLY = placeholderEvents('event-early', 'Round 1–5');
+const EVENTS_LATE = placeholderEvents('event-late', 'Round 6+');
+const EARLY_EVENTS_IN_DECK = 5;
+
 const BANDAGE_SLOTS = 2;
 
 // Up to 4 characters per mission, at most one per class (rulebook p.8).

@@ -974,3 +974,20 @@ details > summary { list-style: none; }
 .group-count { display: inline-flex; align-items: center; gap: 8px; }
 .group-count b { min-width: 20px; text-align: center; }
 .group-nums { display: inline-flex; gap: 4px; }
+
+/* This round's Event card, shown above every phase. */
+.event-banner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warn);
+  border-radius: var(--radius);
+}
+.event-banner .section-label { grid-column: 1; }
+.event-banner .tag { grid-column: 2; grid-row: 1; align-self: start; }
+.event-name { grid-column: 1 / -1; font-size: 17px; }
+.event-text { grid-column: 1 / -1; margin: 0; }
